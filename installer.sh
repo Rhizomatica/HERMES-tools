@@ -120,6 +120,8 @@ if [ "${yn}" = "yes" ]; then
     write_to_sd
   else
     echo "Error: HERMES image download failure."
+    echo "Press any key to exit."
+    read
     exit 1
   fi
 else
