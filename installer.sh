@@ -110,7 +110,7 @@ echo -n "Are you sure you want to write HERMES to ${DEVICE_FILE}? (anwser yes or
 read yn
 if [ "${yn}" = "yes" ]; then
   rm -f "${MD5_NAME}"
-  ${DL_CMD} "${HERMES_URL}/${MD5_NAME}"
+  ${DL_CMD} "${HERMES_URL}/${MD5_NAME}" 2> /dev/null
 
   # check if file already exists...
   if [ "${USE_ZIP}" = "1" ] && [ -f ${IMG_NAME}.zip ]; then
