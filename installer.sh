@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# sudo buggy
+# show available block devices
+# umount the sd card first
+
+USE_ZIP=1
+HERMES_URL="http://www.telemidia.puc-rio.br/~rafaeldiniz/public_files/floresta"
+IMG_NAME="hermes-arm64-v0.1.img"
+MD5_NAME="hermes-arm64-v0.1.img.zip.md5"
+
 write_to_sd () {
 
       echo "Writing HERMES image to SD..."
@@ -36,12 +45,7 @@ if ! [ "$1" = "go" ]; then
   fi
 fi
 
-USE_ZIP=1
-HERMES_URL="http://www.telemidia.puc-rio.br/~rafaeldiniz/public_files/floresta"
-IMG_NAME="hermes-arm64-v0.1.img"
-MD5_NAME="hermes-arm64-v0.1.img.zip.md5"
 # DL_URL=""
-
 
 if ! [ $(id -u) = 0 ]; then
    echo "Error: This script must be run as root. Example:"
@@ -54,20 +58,32 @@ fi
 # Check for dd
 if ! [ -x "$(command -v dd)" ]; then
   echo 'Error: dd is not installed.' >&2
+  echo "Press any key to exit."
+  read
   exit 1
 fi
 
 # Check for wget
 if ! [ -x "$(command -v wget)" ]; then
-  echo 'Error: wget is not installed.' >&2
-  exit 1
+  if ! [ -x "$(command -v curl)" ]; then
+    echo 'Error: wget and curl are not installed.' >&2
+    echo "Press any key to exit."
+    read
+    exit 1
+  else
+    DL_CMD="curl -O "
+  fi
+else
+  DL_CMD="wget -nv --show-progress "
 fi
 
 
 # set Download URL
 if [ "${USE_ZIP}" = "1" ]; then
   if ! [ -x "$(command -v unzip)" ]; then
-    echo 'Error: unzip is not installed.' >&2
+    echo "Error: unzip is not installed."
+    echo "Press any key to exit."
+    read
     exit 1
   fi
   DL_URL="${HERMES_URL}/${IMG_NAME}.zip"
@@ -85,6 +101,8 @@ fi
 if ! [ -b "${DEVICE_FILE}" ]
 then
     echo "Error: ${DEVICE_FILE} is not a HD, SSD or SD device."
+    echo "Press any key to exit."
+    read
     exit 1
 fi
 
@@ -92,7 +110,7 @@ echo -n "Are you sure you want to write HERMES to ${DEVICE_FILE}? (anwser yes or
 read yn
 if [ "${yn}" = "yes" ]; then
   rm -f "${MD5_NAME}"
-  wget -q "${HERMES_URL}/${MD5_NAME}"
+  ${DL_CMD} "${HERMES_URL}/${MD5_NAME}"
 
   # check if file already exists...
   if [ "${USE_ZIP}" = "1" ] && [ -f ${IMG_NAME}.zip ]; then
@@ -110,7 +128,7 @@ if [ "${yn}" = "yes" ]; then
     fi
   fi
 
-  wget -nv --show-progress "${DL_URL}"
+  ${DL_CMD} "${DL_URL}"
 
   if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
 
