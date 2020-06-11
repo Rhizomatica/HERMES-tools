@@ -27,7 +27,11 @@ if ! [ "$1" = "go" ]; then
   fi
 
   if [ -n "$XTERMINAL" ]; then
-    ${XTERMINAL} -e "$0 go"
+    if ! [ $(id -u) = 0 ]; then
+      ${XTERMINAL} -e "echo \"Installer needs to be called as root. Running with sudo.\"; sudo $0 go"
+    else
+      ${XTERMINAL} -e "$0 go"
+    fi
     exit 0
   fi
 fi
@@ -120,5 +124,7 @@ if [ "${yn}" = "yes" ]; then
   fi
 else
   echo "Error: Please answer \"yes\" to proceed."
+  echo "Press any key to exit."
+  read
   exit 1
 fi
