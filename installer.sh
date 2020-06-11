@@ -42,7 +42,9 @@ MD5_NAME="hermes-arm64-v0.1.img.zip.md5"
 if ! [ $(id -u) = 0 ]; then
    echo "Error: This script must be run as root. Example:"
    echo "sudo $0"
-   exit 1
+   echo "Press any key to exit."
+   read
+   exit 0
 fi
 
 # Check for dd
