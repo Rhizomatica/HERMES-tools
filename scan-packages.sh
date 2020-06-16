@@ -1,1 +1,1 @@
-reprepro includedeb buster armhf/*
+reprepro -b hermes-repo/ includedeb buster ~/repo/armhf/*.deb
