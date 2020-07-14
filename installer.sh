@@ -6,8 +6,8 @@
 
 USE_ZIP=1
 HERMES_URL="http://www.telemidia.puc-rio.br/~rafaeldiniz/public_files/floresta"
-IMG_NAME="hermes-arm64-v0.1.img"
-MD5_NAME="hermes-arm64-v0.1.img.zip.md5"
+IMG_NAME="hermes-arm64-v0.2.img"
+MD5_NAME="hermes-arm64-v0.2.img.zip.md5"
 
 write_to_sd () {
 
