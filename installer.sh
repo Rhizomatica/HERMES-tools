@@ -9,7 +9,7 @@ USE_XZ=1
 HERMES_URL="http://www.telemidia.puc-rio.br/~rafaeldiniz/public_files/floresta"
 IMG_NAME="2023-05-03-raspios-bullseye-arm64-lite.img.xz"
 MD5_NAME="2023-05-03-raspios-bullseye-arm64-lite.img.xz.md5"
-DEVICE_FILE="mmcblk0"
+DEVICE_FILE="/dev/mmcblk0"
 
 write_to_sd_from_xz () {
 
@@ -132,7 +132,7 @@ if [ "${yn}" = "yes" ]; then
       read
       exit 1
     fi
-    echo"Success! HERMES installer finished."
+    echo "Success! HERMES installer finished."
     echo "Press any key to exit."
     read
     exit 0
