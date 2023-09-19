@@ -4,10 +4,23 @@
 # show available block devices
 # umount the sd card first
 
-USE_ZIP=1
+USE_ZIP=0
+USE_XZ=1
 HERMES_URL="http://www.telemidia.puc-rio.br/~rafaeldiniz/public_files/floresta"
-IMG_NAME="hermes-arm64-v0.2.img"
-MD5_NAME="hermes-arm64-v0.2.img.zip.md5"
+IMG_NAME="2023-05-03-raspios-bullseye-arm64-lite.img.xz"
+MD5_NAME="2023-05-03-raspios-bullseye-arm64-lite.img.xz.md5"
+DEVICE_FILE="mmcblk0"
+
+write_to_sd_from_xz () {
+
+      echo "Writing HERMES image to SD..."
+      xzcat ${IMG_NAME} | dd of=${DEVICE_FILE} status=progress
+      echo "Done!"
+      echo "Press any key to exit, Remove the USB pendrive and reboot."
+      read
+      exit 0
+}
+
 
 write_to_sd () {
 
@@ -45,8 +58,6 @@ if ! [ "$1" = "go" ]; then
   fi
 fi
 
-# DL_URL=""
-
 if ! [ $(id -u) = 0 ]; then
    echo "Error: This script must be run as root. Example:"
    echo "sudo $0"
@@ -63,16 +74,15 @@ if ! [ -x "$(command -v dd)" ]; then
   exit 1
 fi
 
-# Check for wget
-if ! [ -x "$(command -v wget)" ]; then
-  if ! [ -x "$(command -v curl)" ]; then
-    echo 'Error: wget and curl are not installed.' >&2
-    echo "Press any key to exit."
-    read
-    exit 1
-  else
-    DL_CMD="curl -O "
-  fi
+if  ! [ -x "$(command -v wget)" ]; then   # Check for wget
+    if ! [ -x "$(command -v curl)" ]; then
+        echo 'Error: wget and curl are not installed.' >&2
+        echo "Press any key to exit."
+        read
+        exit 1
+    else
+      DL_CMD="curl -O "
+    fi
 else
   DL_CMD="wget -nv --show-progress "
 fi
@@ -92,11 +102,11 @@ else
 fi
 
 
-echo -n "Type your SD card device (default=/dev/sdb): "
-read DEVICE_FILE
-if [ -z "${DEVICE_FILE}" ]; then
-  DEVICE_FILE="/dev/sdb"
-fi
+#echo -n "Type your SD card device (default=/dev/sdb): "
+#read DEVICE_FILE
+#if [ -z "${DEVICE_FILE}" ]; then
+#  DEVICE_FILE="/dev/sdb"
+#fi
 
 if ! [ -b "${DEVICE_FILE}" ]
 then
@@ -109,10 +119,27 @@ fi
 echo -n "Are you sure you want to write HERMES to ${DEVICE_FILE}? (anwser yes or no): "
 read yn
 if [ "${yn}" = "yes" ]; then
-  rm -f "${MD5_NAME}"
-  ${DL_CMD} "${HERMES_URL}/${MD5_NAME}" 2> /dev/null
+#  rm -f "${MD5_NAME}"
+#  ${DL_CMD} "${HERMES_URL}/${MD5_NAME}" 2> /dev/null
 
   # check if file already exists...
+  if [ "${USE_XZ}" = "1" ] && [ -f ${IMG_NAME} ]; then
+    if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
+      write_to_sd_from_xz
+    else
+      echo "Error: HERMES installer failure."
+      echo "Press any key to exit."
+      read
+      exit 1
+    fi
+    echo"Success! HERMES installer finished."
+    echo "Press any key to exit."
+    read
+    exit 0
+  fi
+
+
+
   if [ "${USE_ZIP}" = "1" ] && [ -f ${IMG_NAME}.zip ]; then
     if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
       unzip_image
