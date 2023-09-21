@@ -9,6 +9,7 @@ USE_XZ=1
 HERMES_URL="http://www.telemidia.puc-rio.br/~rafaeldiniz/public_files/floresta"
 IMG_NAME="2023-05-03-raspios-bullseye-arm64-lite.img.xz"
 MD5_NAME="2023-05-03-raspios-bullseye-arm64-lite.img.xz.md5"
+HERMES_INSTALLER="hermes-installer.tar.gz"
 DEVICE_FILE="/dev/mmcblk0"
 
 write_to_sd_from_xz () {
@@ -132,46 +133,15 @@ if [ "${yn}" = "yes" ]; then
       read
       exit 1
     fi
-    echo "Success! HERMES installer finished."
-    echo "Press any key to exit."
+    echo "System HERMES installed."
+    echo "Press any key to continue."
     read
-    exit 0
   fi
-
-
-
-  if [ "${USE_ZIP}" = "1" ] && [ -f ${IMG_NAME}.zip ]; then
-    if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
-      unzip_image
-      write_to_sd
-    else
-      rm -f ${IMG_NAME}.zip
-    fi
-  elif [ -f ${IMG_NAME} ]; then
-    if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
-      write_to_sd
-    else
-      rm -f ${IMG_NAME}
-    fi
-  fi
-
-  ${DL_CMD} "${DL_URL}"
-
-  if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
-
-    if [ "${USE_ZIP}" = "1" ]; then
-      unzip_image
-    fi
-    write_to_sd
-  else
-    echo "Error: HERMES image download failure."
-    echo "Press any key to exit."
-    read
-    exit 1
-  fi
-else
-  echo "Error: Please answer \"yes\" to proceed."
-  echo "Press any key to exit."
-  read
-  exit 1
 fi
+
+echo "Copying the HERMES installer.sh"
+
+tar zxvf ${HERMES_INSTALLER}
+mount /dev/mmcblk0p2 /mnt/
+mv hermes-installer /mnt/root
+umount /mnt

@@ -1,0 +1,16 @@
+[Unit]
+Description=Script starter
+After=getty.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=oneshot
+# RemainAfterExit=yes
+ExecStart=/usr/bin/hermes_installer.sh
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target
+
