@@ -85,6 +85,9 @@ echo "Mouting the newly installed system."
 partprobe ${DEVICE_FILE}
 mount ${DEVICE_FILE}p2 /mnt
 mount ${DEVICE_FILE}p1 /mnt/boot
+
+cp hermes-installer.tar.gz /mnt/root/
+
 cd /mnt
 
 mount -o bind /dev dev
