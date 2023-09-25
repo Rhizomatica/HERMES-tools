@@ -7,7 +7,7 @@ INSTALLER_DIR="/root"
 
 write_to_sd_from_plzip () {
 
-      echo "Writing HERMES image to SD..."
+      echo "Writing HERMES system image to internal SD card..."
       plzip -c -d ${IMG_NAME} | dd of=${DEVICE_FILE} status=progress
       echo "Done!"
       echo "Press any key to exit, Remove the USB pendrive and reboot."
@@ -59,7 +59,7 @@ fi
 
 read -p "Are you sure you want to write HERMES to ${DEVICE_FILE}? (anwser yes or no): "
 case $yn in
-    [Yy]* ) echo "Starting HERMES system image copy...";;
+    [Yy]* ) echo "Checking image integrity before copy...";;
     [Nn]* ) exit;;
     * ) echo "Please answer yes or no.";;
 esac
