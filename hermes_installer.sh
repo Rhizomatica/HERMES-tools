@@ -57,26 +57,26 @@ if ! [ -x "$(command -v dd)" ]; then
   exit 1
 fi
 
-echo -n "Are you sure you want to write HERMES to ${DEVICE_FILE}? (anwser yes or no): "
-read yn
-if [ "${yn}" = "yes" ]; then
-#  rm -f "${MD5_NAME}"
-#  ${DL_CMD} "${HERMES_URL}/${MD5_NAME}" 2> /dev/null
+read -p "Are you sure you want to write HERMES to ${DEVICE_FILE}? (anwser yes or no): "
+case $yn in
+    [Yy]* ) echo "Starting HERMES system image copy...";;
+    [Nn]* ) exit;;
+    * ) echo "Please answer yes or no.";;
+esac
 
-  # check if file already exists...
-  if [ -f ${IMG_NAME} ]; then
+# check if file already exists...
+if [ -f ${IMG_NAME} ]; then
     if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
-      write_to_sd_from_plzip
+        write_to_sd_from_plzip
     else
-      echo "Error: HERMES installer failure."
-      echo "Press any key to exit."
-      read
-      exit 1
+        echo "Error: HERMES installer failure."
+        echo "Press any key to exit."
+        read
+        exit 1
     fi
     echo "Initial setup done. Configuring the system now..."
     echo "Press any key to continue."
     read
-  fi
 fi
 
 echo "Mouting the newly installed system."
