@@ -3,7 +3,7 @@
 IMG_NAME="reference-install-image.img.lz"
 MD5_NAME="reference-install-image.img.lz.md5"
 DEVICE_FILE="/dev/mmcblk0"
-
+INSTALLER_DIR="/root"
 
 write_to_sd_from_plzip () {
 
@@ -64,7 +64,9 @@ case $yn in
     * ) echo "Please answer yes or no.";;
 esac
 
-# check if file already exists...
+
+cd ${INSTALLER_DIR}
+# check if file alr1eady exists...
 if [ -f ${IMG_NAME} ]; then
     if md5sum --status -c ${MD5_NAME} 2> /dev/null; then
         write_to_sd_from_plzip
