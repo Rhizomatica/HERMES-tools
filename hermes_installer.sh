@@ -11,8 +11,6 @@ write_to_sd_from_plzip () {
       plzip -c -d ${IMG_NAME} | dd of=${DEVICE_FILE} status=progress
       echo "Done!"
       echo "Press any key to exit, Remove the USB pendrive and reboot."
-      read
-      exit 0
 }
 
 clear
