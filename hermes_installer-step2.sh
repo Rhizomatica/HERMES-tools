@@ -12,8 +12,10 @@ echo "Running the installer for ${station_name}"
 
 ./installer.sh ${station_name}
 
-echo "Installation finished. Disabling the installer."
+echo "Installation finished!"
 
 systemctl disable installer
 
-echo "Please reboot the radio."
+echo "Press any key to REBOOT the radio..."
+read
+reboot
