@@ -79,12 +79,23 @@ if [ -f ${IMG_NAME} ]; then
     read
 fi
 
-echo "Mouting the newly installed system."
+echo "Copying the latest version of the installed to the newly installed system."
 partprobe ${DEVICE_FILE}
 mount ${DEVICE_FILE}p2 /mnt
 mount ${DEVICE_FILE}p1 /mnt/boot
 
 cp hermes-installer.tar.gz /mnt/root/
+
+umount /mnt/boot
+umount /mnt/
+
+echo "You can safely reboot."
+echo "Please press any key, and REMOVE the USB pendrive to continue the installation."
+read
+reboot
+
+exit 0
+## moved to step 2 installation
 
 cd /mnt
 
