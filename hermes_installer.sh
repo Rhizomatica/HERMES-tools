@@ -6,11 +6,8 @@ DEVICE_FILE="/dev/mmcblk0"
 INSTALLER_DIR="/root"
 
 write_to_sd_from_plzip () {
-
       echo "Writing HERMES system image to internal SD card..."
       plzip -c -d ${IMG_NAME} | dd of=${DEVICE_FILE} status=progress
-      echo "Done!"
-      echo "Press any key to exit, Remove the USB pendrive and reboot."
 }
 
 clear
@@ -74,9 +71,6 @@ if [ -f ${IMG_NAME} ]; then
         read
         exit 1
     fi
-    echo "Initial setup done. Configuring the system now..."
-    echo "Press any key to continue."
-    read
 fi
 
 echo "Copying the latest version of the installed to the newly installed system."
