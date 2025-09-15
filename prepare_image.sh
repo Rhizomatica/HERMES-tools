@@ -38,7 +38,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "[-] Missing $1"; exit 1; }; }
-for cmd in losetup sfdisk jq e2fsck resize2fs tune2fs truncate zerofree gzip md5sum; do
+for cmd in losetup sfdisk jq e2fsck resize2fs tune2fs truncate zerofree gzip md5sum e4defrag; do
     need_cmd "$cmd"
 done
 
@@ -47,8 +47,8 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-echo "[*] Working on $IMAGE"
-cp -v "$IMAGE" "$IMAGE.bak"  # safety backup
+#echo "[*] Working on $IMAGE"
+#cp -v "$IMAGE" "$IMAGE.bak"  # safety backup
 
 # --- Attach image ---
 LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
@@ -152,9 +152,21 @@ if [ -d "$VAR_ARCHIVES" ]; then
     rm -rf "$VAR_ARCHIVES"/*
 fi
 
+# Zero out the swapfile
+SWAP="$MNTDIR/var/swap"
+if [ -f "$SWAP" ]; then
+    echo "[*] Zeroing swapfile $SWAP"
+    dd if=/dev/zero of="$SWAP" bs=1M status=progress || true
+fi
+
+echo "[*] Running Disk Defrag (e4defrag)"
+e4defrag "${LOOPDEV}p2"
+
 sync
+
 umount "$MNTDIR"
 rmdir "$MNTDIR"
+
 
 # --- Zero free space ---
 echo "[*] Zeroing free space"

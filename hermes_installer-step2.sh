@@ -6,7 +6,7 @@ INSTALLER_DIR="/root"
 
 cd ${INSTALLER_DIR}
 rm -f hermes-installer.tar.gz
-wget --http-user=adm --http-password=0aSgeklPbU60Q http://aco-connexion.org/downloads/hermes-installer.tar.gz
+wget http://.../downloads/hermes-installer.tar.gz
 tar xvf hermes-installer.tar.gz
 cd hermes-installer
 echo -n "Type the station name: "
