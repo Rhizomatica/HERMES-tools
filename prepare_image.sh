@@ -1,117 +1,125 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <disk-image>"
-    exit 1
-fi
-
+# --- Config ---
 IMAGE="$1"
-# Safe size for a 32GB SD card (example)
+# optional: set target size in bytes, leave empty for "shrink to minimum"
+# TARGET_SIZE=${2:-}
 TARGET_SIZE=31100000256
+
 LOOPDEV=""
 
-# Require root
-if [ "$(id -u)" -ne 0 ]; then
-    echo "[-] Must run as root"
-    exit 1
-fi
-
-# Check required tools
-for cmd in truncate sfdisk losetup e2fsck resize2fs zerofree gzip md5sum jq fdisk; do
-    command -v "$cmd" >/dev/null 2>&1 || {
-        echo "[-] Missing required tool: $cmd"
-        exit 1
-    }
-done
-
+# --- Helpers ---
 cleanup() {
-    if [ -n "$LOOPDEV" ] && losetup -a | grep -q "$LOOPDEV"; then
-        echo "[!] Cleaning up: detaching $LOOPDEV"
+    if [ -n "${LOOPDEV}" ] && losetup -a | grep -q "$LOOPDEV"; then
+        echo "[!] Detaching $LOOPDEV"
         losetup -d "$LOOPDEV" || true
     fi
 }
 trap cleanup EXIT INT TERM
 
-echo "[*] Target image size: $TARGET_SIZE bytes"
+need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "[-] Missing $1"; exit 1; }; }
+for cmd in losetup sfdisk jq e2fsck resize2fs tune2fs truncate zerofree gzip md5sum; do
+    need_cmd "$cmd"
+done
 
-# Step 1: Attach image to loop device
-echo "[*] Attaching image to loop device"
-LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
-
-# Step 2: Shrink filesystem if needed
-CUR_SIZE=$(blockdev --getsize64 "${LOOPDEV}p2")
-if [ "$TARGET_SIZE" -lt "$CUR_SIZE" ]; then
-    echo "[*] Shrinking filesystem on ${LOOPDEV}p2"
-    e2fsck -f -y "${LOOPDEV}p2"
-
-    # Query minimum size (in 4K blocks)
-    MIN_BLOCKS=$(resize2fs -P "${LOOPDEV}p2" 2>/dev/null | awk '{print $7}')
-
-    # Compute max blocks that fit inside target size
-    MAX_BLOCKS=$(( (TARGET_SIZE / 4096) - 1024 ))  # leave ~4MB margin
-
-    if [ "$MIN_BLOCKS" -gt "$MAX_BLOCKS" ]; then
-        echo "[-] Filesystem cannot shrink to fit target size ($TARGET_SIZE bytes)"
-        exit 1
-    fi
-
-    echo "[*] Resizing filesystem to $MAX_BLOCKS blocks (~$((MAX_BLOCKS*4096/1024/1024)) MiB)"
-    resize2fs "${LOOPDEV}p2" $MAX_BLOCKS
-fi
-
-# Step 3: Detach loop before changing partition table
-losetup -d "$LOOPDEV"
-LOOPDEV=""
-
-# Step 4: Update partition table with sfdisk
-echo "[*] Updating partition table for partition 2"
-
-START_SECTOR=$(sfdisk -J "$IMAGE" | jq '.partitiontable.partitions[1].start')
-if ! [[ "$START_SECTOR" =~ ^[0-9]+$ ]]; then
-    echo "[-] Failed to determine start sector for partition 2"
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <disk-image> [target-bytes]"
     exit 1
 fi
 
-END_SECTOR=$(( (TARGET_SIZE / 512) - 1 ))
-SIZE_SECTORS=$((END_SECTOR - START_SECTOR + 1))
+echo "[*] Working on $IMAGE"
+cp -v "$IMAGE" "$IMAGE.bak"  # safety backup
 
-echo "[DEBUG] START=$START_SECTOR END=$END_SECTOR SIZE=$SIZE_SECTORS"
-echo "$START_SECTOR,$SIZE_SECTORS,L" | sfdisk -N 2 "$IMAGE"
-
-# Step 5: Resize raw image file
-echo "[*] Truncating image file to $TARGET_SIZE bytes"
-truncate -s "$TARGET_SIZE" "$IMAGE"
-
-# Step 6: Reattach loop and grow FS if needed
-echo "[*] Reattaching loop device"
+# --- Attach image ---
 LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
-NEW_SIZE=$(blockdev --getsize64 "${LOOPDEV}p2")
-if [ "$NEW_SIZE" -gt "$CUR_SIZE" ]; then
-    echo "[*] Growing filesystem on ${LOOPDEV}p2"
-    e2fsck -f -y "${LOOPDEV}p2"
-    resize2fs "${LOOPDEV}p2"
+echo "[*] Loop attached: $LOOPDEV"
+
+# --- Get FS block info ---
+BLOCK_COUNT=$(tune2fs -l "${LOOPDEV}p2" | awk -F: '/Block count/ {gsub(/ /,"",$2); print $2}')
+BLOCK_SIZE=$(tune2fs -l "${LOOPDEV}p2" | awk -F: '/Block size/ {gsub(/ /,"",$2); print $2}')
+NEEDED_BYTES=$(( BLOCK_COUNT * BLOCK_SIZE ))
+NEEDED_SECTORS=$(( NEEDED_BYTES / 512 ))
+
+echo "[*] FS needs $NEEDED_BYTES bytes ($NEEDED_SECTORS sectors)"
+
+# --- Partition info ---
+START_SECTOR=$(sfdisk -J "$IMAGE" | jq '.partitiontable.partitions[1].start')
+CUR_SIZE_SECTORS=$(sfdisk -J "$IMAGE" | jq '.partitiontable.partitions[1].size')
+CUR_END=$(( START_SECTOR + CUR_SIZE_SECTORS - 1 ))
+
+echo "[*] Partition 2: start=$START_SECTOR size=$CUR_SIZE_SECTORS sectors"
+
+# --- Expand partition if FS bigger ---
+REQUIRED_END=$(( START_SECTOR + NEEDED_SECTORS - 1 ))
+if [ "$REQUIRED_END" -gt "$CUR_END" ]; then
+    NEW_SIZE=$(( REQUIRED_END - START_SECTOR + 1 ))
+    echo "[*] Expanding partition 2 -> $NEW_SIZE sectors"
+    losetup -d "$LOOPDEV"
+    echo "$START_SECTOR,$NEW_SIZE,L" | sfdisk -N 2 "$IMAGE"
+    LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
 fi
 
-# Step 7: Zero free space
-echo "[*] Zeroing free space on ${LOOPDEV}p2"
-zerofree "${LOOPDEV}p2"
+# --- Repair FS ---
+echo "[*] Running e2fsck"
+e2fsck -f -y "${LOOPDEV}p2"
 
-# Step 8: Detach loop
-echo "[*] Detaching loop device"
+# --- Shrink FS if needed ---
+MIN_BLOCKS=$(resize2fs -P "${LOOPDEV}p2" 2>/dev/null | awk '{print $7}')
+echo "[*] Minimum blocks: $MIN_BLOCKS"
+
+if [ -n "$TARGET_SIZE" ]; then
+    MAX_BLOCKS=$(( TARGET_SIZE / BLOCK_SIZE - 1024 )) # margin
+    if [ "$MIN_BLOCKS" -gt "$MAX_BLOCKS" ]; then
+        echo "[-] Cannot shrink FS to $TARGET_SIZE bytes (min > max)"
+        exit 1
+    fi
+    NEW_BLOCKS=$MAX_BLOCKS
+    echo "[*] Resizing FS to target size: $NEW_BLOCKS blocks"
+    resize2fs "${LOOPDEV}p2" $NEW_BLOCKS
+else
+    echo "[*] Shrinking FS to minimum: $MIN_BLOCKS blocks"
+    resize2fs "${LOOPDEV}p2" $MIN_BLOCKS
+fi
+
+e2fsck -f -y "${LOOPDEV}p2"
+
+# --- Update partition to FS size ---
+BLOCK_COUNT_NOW=$(tune2fs -l "${LOOPDEV}p2" | awk -F: '/Block count/ {gsub(/ /,"",$2); print $2}')
+NEEDED_BYTES_NOW=$(( BLOCK_COUNT_NOW * BLOCK_SIZE ))
+NEEDED_SECTORS_NOW=$(( NEEDED_BYTES_NOW / 512 ))
+NEW_END=$(( START_SECTOR + NEEDED_SECTORS_NOW - 1 ))
+NEW_SIZE_SECTORS=$(( NEW_END - START_SECTOR + 1 ))
+
+echo "[*] Final FS size: $NEEDED_BYTES_NOW bytes"
+echo "[*] Shrinking partition 2 -> $NEW_SIZE_SECTORS sectors"
+
+losetup -d "$LOOPDEV"
+echo "$START_SECTOR,$NEW_SIZE_SECTORS,L" | sfdisk -N 2 "$IMAGE"
+LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
+
+# --- Final checks ---
+e2fsck -f -y "${LOOPDEV}p2"
+
+# --- Truncate image to match partition ---
+FINAL_BYTES=$(( (NEW_END + 1) * 512 ))
+echo "[*] Truncating image to $FINAL_BYTES bytes"
+losetup -d "$LOOPDEV"
+LOOPDEV=""
+truncate -s "$FINAL_BYTES" "$IMAGE"
+
+# --- Zero free space ---
+LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
+echo "[*] Zeroing free space"
+zerofree "${LOOPDEV}p2"
 losetup -d "$LOOPDEV"
 LOOPDEV=""
 
-# Step 9: Compress and checksum
-echo "[*] Compressing image with gzip -9"
+# --- Compress & checksum ---
+echo "[*] Compressing with gzip -9"
 gzip -9 -v "$IMAGE"
-
-echo "[*] Generating MD5 checksum"
 md5sum "${IMAGE}.gz" > "${IMAGE}.gz.md5"
-
-echo "[*] Verifying checksum"
 md5sum -c "${IMAGE}.gz.md5"
 
-echo "[+] Done. Final size: $TARGET_SIZE bytes"
-echo "[+] Compressed image: ${IMAGE}.gz"
-echo "[+] Checksum saved to: ${IMAGE}.gz.md5"
+echo "[+] Done. Final size: $FINAL_BYTES bytes"
+echo "[+] Output: ${IMAGE}.gz"
