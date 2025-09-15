@@ -152,13 +152,6 @@ if [ -d "$VAR_ARCHIVES" ]; then
     rm -rf "$VAR_ARCHIVES"/*
 fi
 
-# Zero out the swapfile
-SWAP="$MNTDIR/var/swap"
-if [ -f "$SWAP" ]; then
-    echo "[*] Zeroing swapfile $SWAP"
-    dd if=/dev/zero of="$SWAP" bs=1M status=progress || true
-fi
-
 echo "[*] Running Disk Defrag (e4defrag)"
 e4defrag "${LOOPDEV}p2"
 
@@ -175,8 +168,13 @@ losetup -d "$LOOPDEV"
 LOOPDEV=""
 
 # --- Compress & checksum ---
-echo "[*] Compressing with gzip -9"
-gzip -9 -v "$IMAGE"
+#echo "[*] Compressing with gzip -9"
+#gzip -9 -v "$IMAGE"
+#md5sum "${IMAGE}.gz" > "${IMAGE}.gz.md5"
+#md5sum -c "${IMAGE}.gz.md5"
+
+echo "[*] Compressing with pigz -9 (parallel gzip)"
+pigz -p "$(nproc)" -9 -v "$IMAGE"
 md5sum "${IMAGE}.gz" > "${IMAGE}.gz.md5"
 md5sum -c "${IMAGE}.gz.md5"
 
