@@ -1,11 +1,30 @@
 #!/bin/bash
 set -euo pipefail
 
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <disk-image>"
+    exit 1
+fi
+
 # --- Config ---
 IMAGE="$1"
 # optional: set target size in bytes, leave empty for "shrink to minimum"
 # TARGET_SIZE=${2:-}
 TARGET_SIZE=31100000256
+
+# Require root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] Must run as root"
+    exit 1
+fi
+
+# Check required tools
+for cmd in truncate sfdisk losetup e2fsck resize2fs zerofree gzip md5sum jq fdisk; do
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "[-] Missing required tool: $cmd"
+        exit 1
+    }
+done
 
 LOOPDEV=""
 
