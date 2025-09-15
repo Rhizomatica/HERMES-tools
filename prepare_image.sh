@@ -108,8 +108,36 @@ losetup -d "$LOOPDEV"
 LOOPDEV=""
 truncate -s "$FINAL_BYTES" "$IMAGE"
 
-# --- Zero free space ---
+
 LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
+
+# --- Mount partition and clean /root, /home/pi, /var ---
+MNTDIR=$(mktemp -d /mnt/image.XXXX)
+echo "[*] Mounting ${LOOPDEV}p2 at $MNTDIR"
+mount "${LOOPDEV}p2" "$MNTDIR"
+
+# Clean /root and /home/pi
+for DIR in root home/pi; do
+    TARGET="$MNTDIR/$DIR"
+    if [ -d "$TARGET" ]; then
+        echo "[*] Cleaning $TARGET (keeping dotfiles)"
+        rm -rf "$TARGET"/*
+        rm -rf "$TARGET/.cache" "$TARGET/.local"
+    fi
+done
+
+# Clean old Debian packages
+VAR_ARCHIVES="$MNTDIR/var/cache/apt/archives"
+if [ -d "$VAR_ARCHIVES" ]; then
+    echo "[*] Cleaning old Debian packages in $VAR_ARCHIVES"
+    rm -rf "$VAR_ARCHIVES"/*
+fi
+
+sync
+umount "$MNTDIR"
+rmdir "$MNTDIR"
+
+# --- Zero free space ---
 echo "[*] Zeroing free space"
 zerofree "${LOOPDEV}p2"
 losetup -d "$LOOPDEV"
