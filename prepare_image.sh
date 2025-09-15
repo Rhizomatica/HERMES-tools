@@ -7,7 +7,7 @@ if [ $# -ne 1 ]; then
 fi
 
 IMAGE="$1"
-# safe size for a 32GB SD card
+# Safe size for a 32GB SD card (example)
 TARGET_SIZE=31100000256
 LOOPDEV=""
 
@@ -18,7 +18,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Check required tools
-for cmd in truncate sfdisk losetup e2fsck resize2fs zerofree gzip md5sum; do
+for cmd in truncate sfdisk losetup e2fsck resize2fs zerofree gzip md5sum jq fdisk; do
     command -v "$cmd" >/dev/null 2>&1 || {
         echo "[-] Missing required tool: $cmd"
         exit 1
@@ -39,26 +39,48 @@ echo "[*] Target image size: $TARGET_SIZE bytes"
 echo "[*] Attaching image to loop device"
 LOOPDEV=$(losetup --find --partscan --show "$IMAGE")
 
-# Step 2: Resize filesystem before shrinking
+# Step 2: Shrink filesystem if needed
 CUR_SIZE=$(blockdev --getsize64 "${LOOPDEV}p2")
 if [ "$TARGET_SIZE" -lt "$CUR_SIZE" ]; then
     echo "[*] Shrinking filesystem on ${LOOPDEV}p2"
     e2fsck -f -y "${LOOPDEV}p2"
-    resize2fs "${LOOPDEV}p2" $(( (TARGET_SIZE / 512) - 2048 ))s
+
+    # Query minimum size (in 4K blocks)
+    MIN_BLOCKS=$(resize2fs -P "${LOOPDEV}p2" 2>/dev/null | awk '{print $7}')
+
+    # Compute max blocks that fit inside target size
+    MAX_BLOCKS=$(( (TARGET_SIZE / 4096) - 1024 ))  # leave ~4MB margin
+
+    if [ "$MIN_BLOCKS" -gt "$MAX_BLOCKS" ]; then
+        echo "[-] Filesystem cannot shrink to fit target size ($TARGET_SIZE bytes)"
+        exit 1
+    fi
+
+    echo "[*] Resizing filesystem to $MAX_BLOCKS blocks (~$((MAX_BLOCKS*4096/1024/1024)) MiB)"
+    resize2fs "${LOOPDEV}p2" $MAX_BLOCKS
 fi
 
-# Step 3: Detach loop before touching partition table
+# Step 3: Detach loop before changing partition table
 losetup -d "$LOOPDEV"
 LOOPDEV=""
 
-# Step 4: Resize partition table entry with sfdisk
+# Step 4: Update partition table with sfdisk
 echo "[*] Updating partition table for partition 2"
-START_SECTOR=$(sfdisk -d "$IMAGE" | awk '/: start=/ && /, type=83/ {print $4}' | cut -d= -f2)
-END_SECTOR=$(( (TARGET_SIZE / 512) - 1 ))
-echo ",$((END_SECTOR - START_SECTOR + 1))" | sfdisk -N 2 "$IMAGE"
 
-# Step 5: Truncate image file
-echo "[*] Resizing raw image file"
+START_SECTOR=$(sfdisk -J "$IMAGE" | jq '.partitiontable.partitions[1].start')
+if ! [[ "$START_SECTOR" =~ ^[0-9]+$ ]]; then
+    echo "[-] Failed to determine start sector for partition 2"
+    exit 1
+fi
+
+END_SECTOR=$(( (TARGET_SIZE / 512) - 1 ))
+SIZE_SECTORS=$((END_SECTOR - START_SECTOR + 1))
+
+echo "[DEBUG] START=$START_SECTOR END=$END_SECTOR SIZE=$SIZE_SECTORS"
+echo "$START_SECTOR,$SIZE_SECTORS,L" | sfdisk -N 2 "$IMAGE"
+
+# Step 5: Resize raw image file
+echo "[*] Truncating image file to $TARGET_SIZE bytes"
 truncate -s "$TARGET_SIZE" "$IMAGE"
 
 # Step 6: Reattach loop and grow FS if needed
