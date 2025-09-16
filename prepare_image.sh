@@ -41,7 +41,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "[-] Missing $1"; exit 1; }; }
-for cmd in losetup sfdisk jq e2fsck resize2fs tune2fs truncate zerofree gzip md5sum e4defrag; do
+for cmd in losetup sfdisk jq e2fsck resize2fs tune2fs truncate zerofree gzip md5sum e4defrag pigz; do
     need_cmd "$cmd"
 done
 
