@@ -174,9 +174,16 @@ LOOPDEV=""
 #md5sum -c "${IMAGE}.gz.md5"
 
 echo "[*] Compressing with pigz -9 (parallel gzip)"
-pigz -p "$(nproc)" -9 -v "$IMAGE"
+pigz -9 -v "$IMAGE"
 md5sum "${IMAGE}.gz" > "${IMAGE}.gz.md5"
 md5sum -c "${IMAGE}.gz.md5"
 
-echo "[+] Done. Final size: $FINAL_BYTES bytes"
 echo "[+] Output: ${IMAGE}.gz"
+
+#echo "[*] Compressing with plzip -9 (parallel LZMA2)"
+#plzip -9 -v "$IMAGE"
+#md5sum "${IMAGE}.lz" > "${IMAGE}.lz.md5"
+#md5sum -c "${IMAGE}.lz.md5"
+# echo "[+] Output: ${IMAGE}.lz"
+
+echo "[+] Done. Final size: $FINAL_BYTES bytes"
