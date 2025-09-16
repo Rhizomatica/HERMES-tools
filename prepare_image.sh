@@ -13,7 +13,7 @@ fi
 IMAGE="$1"
 # optional: set target size in bytes, leave empty for "shrink to minimum"
 # TARGET_SIZE=${2:-}
-TARGET_SIZE=31100000256
+TARGET_SIZE=30000000000
 
 # Require root
 if [ "$(id -u)" -ne 0 ]; then
