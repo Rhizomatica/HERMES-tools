@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# Force predictable output (avoid locale issues)
+export LC_ALL=C
+
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <disk-image>"
     exit 1
