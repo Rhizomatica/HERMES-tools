@@ -28,26 +28,25 @@ WORKDIR=$(mktemp -d /tmp/piboot.XXXX)
 cleanup() {
   set +e
   echo "Cleaning up..."
-  umount "$WORKDIR/boot" 2>/dev/null || true
+  umount "$WORKDIR/boot/firmware" 2>/dev/null || true
   umount "$WORKDIR" 2>/dev/null || true
+  losetup -d "$LOOP" 2>/dev/null || true
   rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
 
-
-mkdir -p "$WORKDIR/boot"
 
 LOOP=$(losetup --show -fP "$IMG")
 BOOT_PART="${LOOP}p1"
 ROOT_PART="${LOOP}p2"
 
 mount "$ROOT_PART" "$WORKDIR"
-mount "$BOOT_PART" "$WORKDIR/boot"
+mount "$BOOT_PART" "$WORKDIR/boot/firmware"
 
 cp $INSTALLER "$WORKDIR/root/"
 
 systemd-nspawn -D "$WORKDIR" /bin/bash -c "\
-  tar xzf /root/$(basename $INSTALLER) -C /root/ && \
+  ls -l; tar xzf /root/$(basename $INSTALLER) -C /root/ && \
   cd /root/hermes-installer && \
   ./installer.sh $FQDN && \
   rm -rf /root/hermes-installer /root/$(basename $INSTALLER)"
