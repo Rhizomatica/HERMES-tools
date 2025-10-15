@@ -142,6 +142,8 @@ umount "$WORKDIR"
 echo "[*] Zeroing free space for better compression"
 zerofree "${ROOT_PART}"
 
+losetup -d "$LOOP"
+
 echo "[*] Compressing with pigz -9 (parallel gzip)"
 pigz -9 -v "$IMG"
 md5sum "${IMG}.gz" > "${IMG}.gz.md5"
