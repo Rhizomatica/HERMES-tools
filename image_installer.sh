@@ -140,7 +140,7 @@ e4defrag "${ROOT_PART}"
 umount "$WORKDIR"
 
 echo "[*] Zeroing free space for better compression"
-zerofree "${LOOPDEV}p2"
+zerofree "${ROOT_PART}"
 
 echo "[*] Compressing with pigz -9 (parallel gzip)"
 pigz -9 -v "$IMG"
