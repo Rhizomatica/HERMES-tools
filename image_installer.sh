@@ -43,7 +43,7 @@ if [ "$IMG" == "auto" ]; then
     if [ -f "${DEFAULT_IMG_NAME}.xz" ]; then
         rm -f "${DEFAULT_IMG_NAME}"
         unxz -k "${DEFAULT_IMG_NAME}.xz"
-        echo "[*] Using cached image at $IMG.xz"
+        echo "[*] Using cached image at {DEFAULT_IMG_NAME}.xz"
     else
         wget https://downloads.raspberrypi.com/raspios_oldstable_lite_arm64/images/raspios_oldstable_lite_arm64-2025-10-02/${DEFAULT_IMG_NAME}.xz
         rm -f "${DEFAULT_IMG_NAME}"
