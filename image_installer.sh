@@ -26,6 +26,9 @@ FQDN=$3
 USER=${4:-pi}
 PASS=${5:-hermes}
 
+INTERMEDIATE_SIZE=17179869184
+TARGET_SIZE=30000000000
+
 WORKDIR=$(mktemp -d /tmp/piboot.XXXX)
 
 cleanup() {
@@ -56,18 +59,17 @@ fi
 
 # check if image size is less than 16GB
 IMG_SIZE=$(stat -c%s "$IMG")
-if [ "$IMG_SIZE" -lt 17179869184 ]; then
+if [ "$IMG_SIZE" -lt "$INTERMEDIATE_SIZE" ]; then
     echo "[*] Resizing image to 16GB..."
-    qemu-img resize "${IMG}" 17179869184
+    qemu-img resize "${IMG}" "$INTERMEDIATE_SIZE"
 
     LOOP=$(losetup --show -fP "$IMG")
     BOOT_PART="${LOOP}p1"
     ROOT_PART="${LOOP}p2"
 
-    parted --script "$LOOP" \
-           resizepart 2 100% \
-        && e2fsck -f "${ROOT_PART}" \
-        && resize2fs "${ROOT_PART}"
+    parted --script "$LOOP" resizepart 2 100%
+    e2fsck -f "${ROOT_PART}"
+    resize2fs "${ROOT_PART}"
 else
     LOOP=$(losetup --show -fP "$IMG")
     BOOT_PART="${LOOP}p1"
@@ -110,4 +112,40 @@ qemu-system-aarch64 \
     -drive "file=$IMG,if=sd,format=raw" \
     -display gtk
 
-echo "[*] Done. Image $IMG is ready!"
+
+echo "[*] Adjusting to 30GB final image size..."
+IMG_SIZE=$(stat -c%s "$IMG")
+if [ "$IMG_SIZE" -lt "$TARGET_SIZE" ]; then
+    echo "[*] Resizing image to 30GB..."
+    qemu-img resize "${IMG}" $TARGET_SIZE
+
+    LOOP=$(losetup --show -fP "$IMG")
+    BOOT_PART="${LOOP}p1"
+    ROOT_PART="${LOOP}p2"
+
+    parted --script "$LOOP" resizepart 2 100%
+    e2fsck -f "${ROOT_PART}"
+    resize2fs "${ROOT_PART}"
+
+else
+    echo "[*] Image size is already 30GB or larger, skipping resize."
+    LOOP=$(losetup --show -fP "$IMG")
+    BOOT_PART="${LOOP}p1"
+    ROOT_PART="${LOOP}p2"
+fi
+
+echo "[*] Running Disk Defrag (e4defrag)"
+mount "$ROOT_PART" "$WORKDIR"
+e4defrag "${ROOT_PART}"
+umount "$WORKDIR"
+
+echo "[*] Zeroing free space for better compression"
+zerofree "${LOOPDEV}p2"
+
+echo "[*] Compressing with pigz -9 (parallel gzip)"
+pigz -9 -v "$IMG"
+md5sum "${IMG}.gz" > "${IMG}.gz.md5"
+md5sum -c "${IMG}.gz.md5"
+
+echo "[*] Final compressed image size: $(du -m "${IMG}.gz" | cut -f1) MB"
+echo "[*] Done. Image ready: $IMG"
