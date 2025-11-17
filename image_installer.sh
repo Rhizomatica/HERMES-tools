@@ -9,14 +9,16 @@ set -euo pipefail
 
 DEFAULT_IMG_NAME="2025-10-01-raspios-bookworm-arm64-lite.img"
 
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root (for loop device setup)"
+if [ "$#" -lt 3 ]; then
+  echo "Usage: sudo $0 <raspios_image.img> <installer.tar.gz> <station_name>"
+  echo "<raspios_image.img> - path to Raspberry Pi OS image or \"auto\" to download automatically"
+  echo "<installer.tar.gz> - path to hermes-installer tarball"
+  echo "<station_name> - Fully Qualified Domain Name (FQDN) for the station"
   exit 1
 fi
 
-if [ "$#" -lt 3 ]; then
-  echo "Usage: sudo $0 <image> <installer.tar.gz>"
-  echo "<image> - path to Raspberry Pi OS image or \"auto\" to download automatically"
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root (for loop device setup)"
   exit 1
 fi
 
