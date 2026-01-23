@@ -112,8 +112,7 @@ qemu-system-aarch64 \
     -dtb "boot/bcm2711-rpi-4-b.dtb" \
     -append "rw earlyprintk loglevel=8 root=/dev/mmcblk1p2 rootwait" \
     -drive "file=$IMG,if=sd,format=raw" \
-    -display gtk
-
+    -nographic
 
 echo "[*] Adjusting to 30GB final image size..."
 IMG_SIZE=$(stat -c%s "$IMG")
