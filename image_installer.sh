@@ -105,28 +105,18 @@ systemd-nspawn -D "$WORKDIR" /bin/bash -c "\
 
 echo "[*] Done. systemd-spawn is off."
 
-MNT_BOOT="$WORKDIR/boot/firmware"
-
-echo "[*] Copying kernel and DTB..."
-mkdir -p boot
-cp "$MNT_BOOT/kernel8.img" boot/
-cp "$MNT_BOOT/bcm2711-rpi-4-b.dtb" boot/
+# The installer prepared the image for its first boot, which happens on the
+# station's own Raspberry Pi (hermes-installer tasks/do_1st_boot_setup.sh).
+# This used to boot the image once under QEMU; the Raspberry Pi OS trixie
+# kernel doesn't complete a boot on QEMU's raspi4b.
+echo "[*] Removing the installer from the image..."
+rm -rf "$WORKDIR/root/hermes-installer" "$WORKDIR/root/$(basename "$INSTALLER")" "$WORKDIR/root/install"
+systemd-nspawn -q -D "$WORKDIR" apt-get clean
 
 echo "[*] Unmounting image..."
-sudo umount "$MNT_BOOT"
-sudo umount "$WORKDIR"
-sudo losetup -d "$LOOP"
-
-echo "[*] Booting QEMU for last step setup..."
-qemu-system-aarch64 \
-    -M raspi4b \
-    -m 2G \
-    -smp 4 \
-    -kernel "boot/kernel8.img" \
-    -dtb "boot/bcm2711-rpi-4-b.dtb" \
-    -append "rw earlyprintk loglevel=8 root=/dev/mmcblk1p2 rootwait" \
-    -drive "file=$IMG,if=sd,format=raw" \
-    -nographic
+umount "$WORKDIR/boot/firmware"
+umount "$WORKDIR"
+losetup -d "$LOOP"
 
 echo "[*] Adjusting to 30GB final image size..."
 IMG_SIZE=$(stat -c%s "$IMG")
