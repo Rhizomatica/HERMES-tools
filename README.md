@@ -58,6 +58,20 @@ hours; the installer runs under emulation.
 
 - **A station file** for the station, in the installer's `stations/`.
 
+### Checking a station after its first boot
+
+Flash the image, boot it on the station's Raspberry Pi, and run
+[`hermes-firstboot-check.sh`](hermes-firstboot-check.sh) on it as root. Run it
+again after one reboot, which applies the EEPROM settings. It checks:
+- that the first-boot setup ran once and the installer is gone;
+- the swap and the root file system's reserved space;
+- the EEPROM settings;
+- paq8px;
+- the access point, web, mail and database services.
+
+It also lists the radio services and the station's new SSH host key. It
+changes nothing on the station.
+
 ### Keep images private
 
 An image contains that station's private keys (SSH host keys, NNCP keys, TLS
