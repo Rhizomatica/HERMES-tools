@@ -39,8 +39,9 @@ hours; the installer runs under emulation.
 - **Host packages:** `systemd-container qemu-user-binfmt qemu-utils parted
   e2fsprogs zerofree pigz xz-utils wget`.
 - **A hermes-installer tarball with a top-level `hermes-installer/`
-  directory**, from a main that includes hermes-installer#44, #45, #47 and
-  the offline first-boot setup (#48). Earlier installers stop inside
+  directory**, from a main that includes hermes-installer#44, #45, #47,
+  the offline first-boot setup (#48), and #49, which gives `pi` its shell
+  (Raspberry Pi OS trixie ships it with none). Earlier installers stop inside
   systemd-nspawn:
   - at `apt-get update`, because `umask 077` from the station secrets step
     stays in effect (#44);
