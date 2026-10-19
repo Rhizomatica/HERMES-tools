@@ -7,11 +7,17 @@
 
 set -euo pipefail
 
-DEFAULT_IMG_NAME="2025-10-01-raspios-bookworm-arm64-lite.img"
+# Raspberry Pi OS Lite (arm64) release to build on, when the image is "auto".
+# Debian 13 (trixie) based. Set RASPIOS_RELEASE to use another release date
+# from https://downloads.raspberrypi.com/raspios_lite_arm64/images/
+RASPIOS_RELEASE="${RASPIOS_RELEASE:-2026-09-15}"
+DEFAULT_IMG_NAME="${RASPIOS_RELEASE}-raspios-trixie-arm64-lite.img"
+RASPIOS_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-${RASPIOS_RELEASE}"
 
 if [ "$#" -lt 3 ]; then
   echo "Usage: sudo $0 <raspios_image.img> <installer.tar.gz> <station_name>"
-  echo "<raspios_image.img> - path to Raspberry Pi OS image or \"auto\" to download automatically"
+  echo "<raspios_image.img> - path to a Raspberry Pi OS Lite arm64 (trixie) image, or \"auto\" to download"
+  echo "                      release \${RASPIOS_RELEASE} (default ${RASPIOS_RELEASE}) and check its SHA-256"
   echo "<installer.tar.gz> - path to hermes-installer tarball"
   echo "<station_name> - Fully Qualified Domain Name (FQDN) for the station"
   exit 1
@@ -44,17 +50,19 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "$IMG" == "auto" ]; then
-    echo "[*] Downloading latest Raspberry Pi OS Lite image..."
     if [ -f "${DEFAULT_IMG_NAME}.xz" ]; then
-        rm -f "${DEFAULT_IMG_NAME}"
-        unxz -k "${DEFAULT_IMG_NAME}.xz"
         echo "[*] Using cached image at ${DEFAULT_IMG_NAME}.xz"
     else
-        wget https://downloads.raspberrypi.com/raspios_oldstable_lite_arm64/images/raspios_oldstable_lite_arm64-2025-10-02/${DEFAULT_IMG_NAME}.xz
-        rm -f "${DEFAULT_IMG_NAME}"
-        unxz -k "${DEFAULT_IMG_NAME}.xz"
-        echo "[*] Downloaded image to $IMG.xz"
+        echo "[*] Downloading Raspberry Pi OS Lite ${RASPIOS_RELEASE} (trixie)..."
+        wget "${RASPIOS_URL}/${DEFAULT_IMG_NAME}.xz"
     fi
+    if [ ! -f "${DEFAULT_IMG_NAME}.xz.sha256" ]; then
+        wget "${RASPIOS_URL}/${DEFAULT_IMG_NAME}.xz.sha256"
+    fi
+    echo "[*] Checking the image against its published SHA-256..."
+    sha256sum -c "${DEFAULT_IMG_NAME}.xz.sha256"
+    rm -f "${DEFAULT_IMG_NAME}"
+    unxz -k "${DEFAULT_IMG_NAME}.xz"
     IMG="${FQDN}.img"
     mv "${DEFAULT_IMG_NAME}" "${IMG}"
 fi
@@ -63,14 +71,14 @@ fi
 IMG_SIZE=$(stat -c%s "$IMG")
 if [ "$IMG_SIZE" -lt "$INTERMEDIATE_SIZE" ]; then
     echo "[*] Resizing image to 16GB..."
-    qemu-img resize "${IMG}" "$INTERMEDIATE_SIZE"
+    qemu-img resize -f raw "${IMG}" "$INTERMEDIATE_SIZE"
 
     LOOP=$(losetup --show -fP "$IMG")
     BOOT_PART="${LOOP}p1"
     ROOT_PART="${LOOP}p2"
 
     parted --script "$LOOP" resizepart 2 100%
-    e2fsck -f "${ROOT_PART}"
+    e2fsck -f -y "${ROOT_PART}"
     resize2fs "${ROOT_PART}"
 else
     LOOP=$(losetup --show -fP "$IMG")
@@ -84,6 +92,12 @@ mount "$BOOT_PART" "$WORKDIR/boot/firmware"
 
 cp $INSTALLER "$WORKDIR/root/"
 
+# Inside systemd-nspawn, initramfs-tools sees this build host's swap and
+# makes it the resume device of the station's initramfs; on the Pi that
+# device does not exist, and every boot waits for it.
+mkdir -p "$WORKDIR/etc/initramfs-tools/conf.d"
+echo "RESUME=none" > "$WORKDIR/etc/initramfs-tools/conf.d/resume"
+
 systemd-nspawn -D "$WORKDIR" /bin/bash -c "\
   ls -l; tar xzf /root/$(basename $INSTALLER) -C /root/ && \
   cd /root/hermes-installer && \
@@ -91,41 +105,31 @@ systemd-nspawn -D "$WORKDIR" /bin/bash -c "\
 
 echo "[*] Done. systemd-spawn is off."
 
-MNT_BOOT="$WORKDIR/boot/firmware"
-
-echo "[*] Copying kernel and DTB..."
-mkdir -p boot
-cp "$MNT_BOOT/kernel8.img" boot/
-cp "$MNT_BOOT/bcm2711-rpi-4-b.dtb" boot/
+# The installer prepared the image for its first boot, which happens on the
+# station's own Raspberry Pi (hermes-installer tasks/do_1st_boot_setup.sh).
+# This used to boot the image once under QEMU; the Raspberry Pi OS trixie
+# kernel doesn't complete a boot on QEMU's raspi4b.
+echo "[*] Removing the installer from the image..."
+rm -rf "$WORKDIR/root/hermes-installer" "$WORKDIR/root/$(basename "$INSTALLER")" "$WORKDIR/root/install"
+systemd-nspawn -q -D "$WORKDIR" apt-get clean
 
 echo "[*] Unmounting image..."
-sudo umount "$MNT_BOOT"
-sudo umount "$WORKDIR"
-sudo losetup -d "$LOOP"
-
-echo "[*] Booting QEMU for last step setup..."
-qemu-system-aarch64 \
-    -M raspi4b \
-    -m 2G \
-    -smp 4 \
-    -kernel "boot/kernel8.img" \
-    -dtb "boot/bcm2711-rpi-4-b.dtb" \
-    -append "rw earlyprintk loglevel=8 root=/dev/mmcblk1p2 rootwait" \
-    -drive "file=$IMG,if=sd,format=raw" \
-    -nographic
+umount "$WORKDIR/boot/firmware"
+umount "$WORKDIR"
+losetup -d "$LOOP"
 
 echo "[*] Adjusting to 30GB final image size..."
 IMG_SIZE=$(stat -c%s "$IMG")
 if [ "$IMG_SIZE" -lt "$TARGET_SIZE" ]; then
     echo "[*] Resizing image to 30GB..."
-    qemu-img resize "${IMG}" $TARGET_SIZE
+    qemu-img resize -f raw "${IMG}" $TARGET_SIZE
 
     LOOP=$(losetup --show -fP "$IMG")
     BOOT_PART="${LOOP}p1"
     ROOT_PART="${LOOP}p2"
 
     parted --script "$LOOP" resizepart 2 100%
-    e2fsck -f "${ROOT_PART}"
+    e2fsck -f -y "${ROOT_PART}"
     resize2fs "${ROOT_PART}"
 
 else
