@@ -40,15 +40,18 @@ hours; the installer runs under emulation.
   e2fsprogs zerofree pigz xz-utils wget`.
 - **A hermes-installer tarball with a top-level `hermes-installer/`
   directory**, from a main that includes hermes-installer#44, #45, #47,
-  the offline first-boot setup (#48), and #49, which gives `pi` its shell
-  (Raspberry Pi OS trixie ships it with none). Earlier installers stop inside
-  systemd-nspawn:
+  the offline first-boot setup (#48), #49, which gives `pi` its shell
+  (Raspberry Pi OS trixie ships it with none), and #50. Earlier installers
+  stop inside systemd-nspawn:
   - at `apt-get update`, because `umask 077` from the station secrets step
     stays in effect (#44);
   - after "Installing Mercury", on a `systemctl daemon-reload` with no
     running systemd (#45);
   - at "SQL SETUP", when MariaDB takes more than 5 s to start under
-    emulation (#47).
+    emulation (#47);
+  - at "Running wineboot" for a VARA station: wineboot never finishes under
+    qemu-user, so the station's first boot runs it instead (#50).
+    Interrupting a build there leaves a half-installed 16 GB `<station>.img`.
 
   Without #48, the image also expects an emulated first boot that no
   longer happens. To make one:
