@@ -34,7 +34,11 @@ r="$(systemctl show -p Result --value hermes-1st-boot-setup.service 2>/dev/null)
   || fail "hermes-1st-boot-setup.service result: ${r:-unknown}"
 e="$(systemctl is-enabled hermes-1st-boot-setup.service 2>/dev/null)"
 [ "$e" = "disabled" ] && pass "first-boot unit disabled itself" || fail "first-boot unit is $e"
-check "the installer is not left in the image" test ! -e /root/hermes-installer
+if [ -e /root/hermes-installer ]; then
+  fail "/root/hermes-installer is on the station (the image build removes it: it has every station's VPN files)"
+else
+  pass "installer removed from the image"
+fi
 
 echo "== Storage"
 root_dev="$(findmnt -n -o SOURCE /)"
@@ -50,7 +54,8 @@ if echo "$swap" | awk '$2 > 1900000000 { found = 1 } END { exit !found }'; then
 else
   fail "swap: ${swap:-none} (want about 2 GB)"
 fi
-check "swap size set (/etc/dphys-swapfile)" grep -qx 'CONF_SWAPSIZE=2000' /etc/dphys-swapfile
+# the swap in use is what counts; dphys-swapfile's default (CONF_MAXSWAP) also gives 2 GB
+info "swap configured: $(grep -h '^CONF_SWAPSIZE=' /etc/dphys-swapfile 2>/dev/null || echo 'dphys-swapfile default')"
 
 echo "== EEPROM (applied by the next reboot after the first boot)"
 cfg="$(rpi-eeprom-config 2>/dev/null)"
