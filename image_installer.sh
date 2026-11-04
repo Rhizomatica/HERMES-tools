@@ -39,13 +39,45 @@ TARGET_SIZE=30000000000
 
 WORKDIR=$(mktemp -d /tmp/piboot.XXXX)
 
+LOOP=""
+
+# The image on a loop device, its partitions as BOOT_PART and ROOT_PART.
+# Their device nodes appear a moment after losetup (and after parted
+# changes the table): wait for them, or e2fsck and mount find nothing.
+wait_parts() {
+  udevadm settle 2>/dev/null || true
+  for _ in $(seq 1 50); do
+    [ -b "$ROOT_PART" ] && [ -b "$BOOT_PART" ] && return 0
+    sleep 0.2
+  done
+  echo "No $ROOT_PART after 10 s"
+  return 1
+}
+
+attach() {
+  LOOP=$(losetup --show -fP "$IMG")
+  BOOT_PART="${LOOP}p1"
+  ROOT_PART="${LOOP}p2"
+  wait_parts
+}
+
+# Once detached, the number is free for another build (another
+# image_installer.sh running at the same time): forget it, so the exit
+# cleanup cannot detach that build's image.
+detach() {
+  losetup -d "$LOOP"
+  LOOP=""
+}
+
 cleanup() {
   set +e
   echo "Cleaning up..."
   umount "$WORKDIR/boot/firmware" 2>/dev/null || true
   umount "$WORKDIR" 2>/dev/null || true
   rm -rf "$WORKDIR"
-  losetup -d "$LOOP" 2>/dev/null || true
+  if [ -n "$LOOP" ]; then
+    losetup -d "$LOOP" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
@@ -73,17 +105,14 @@ if [ "$IMG_SIZE" -lt "$INTERMEDIATE_SIZE" ]; then
     echo "[*] Resizing image to 16GB..."
     qemu-img resize -f raw "${IMG}" "$INTERMEDIATE_SIZE"
 
-    LOOP=$(losetup --show -fP "$IMG")
-    BOOT_PART="${LOOP}p1"
-    ROOT_PART="${LOOP}p2"
+    attach
 
     parted --script "$LOOP" resizepart 2 100%
+    wait_parts
     e2fsck -f -y "${ROOT_PART}"
     resize2fs "${ROOT_PART}"
 else
-    LOOP=$(losetup --show -fP "$IMG")
-    BOOT_PART="${LOOP}p1"
-    ROOT_PART="${LOOP}p2"
+    attach
     echo "[*] Image size is already 16GB or larger, skipping resize."
 fi
 
@@ -116,7 +145,7 @@ systemd-nspawn -q -D "$WORKDIR" apt-get clean
 echo "[*] Unmounting image..."
 umount "$WORKDIR/boot/firmware"
 umount "$WORKDIR"
-losetup -d "$LOOP"
+detach
 
 echo "[*] Adjusting to 30GB final image size..."
 IMG_SIZE=$(stat -c%s "$IMG")
@@ -124,19 +153,16 @@ if [ "$IMG_SIZE" -lt "$TARGET_SIZE" ]; then
     echo "[*] Resizing image to 30GB..."
     qemu-img resize -f raw "${IMG}" $TARGET_SIZE
 
-    LOOP=$(losetup --show -fP "$IMG")
-    BOOT_PART="${LOOP}p1"
-    ROOT_PART="${LOOP}p2"
+    attach
 
     parted --script "$LOOP" resizepart 2 100%
+    wait_parts
     e2fsck -f -y "${ROOT_PART}"
     resize2fs "${ROOT_PART}"
 
 else
     echo "[*] Image size is already 30GB or larger, skipping resize."
-    LOOP=$(losetup --show -fP "$IMG")
-    BOOT_PART="${LOOP}p1"
-    ROOT_PART="${LOOP}p2"
+    attach
 fi
 
 echo "[*] Running Disk Defrag (e4defrag)"
@@ -147,7 +173,7 @@ umount "$WORKDIR"
 echo "[*] Zeroing free space for better compression"
 zerofree "${ROOT_PART}"
 
-losetup -d "$LOOP"
+detach
 
 echo "[*] Compressing with pigz -9 (parallel gzip)"
 pigz -9 -v "$IMG"
